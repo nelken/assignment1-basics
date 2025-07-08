@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
-
+from cs336_basics.linear import Linear
 
 def scaled_dot_product_attention(query, key, value, mask=None):
     """
@@ -35,15 +35,14 @@ class CausalMultiheadSelfAttention(nn.Module):
     def __init__(self, d_model: int, num_heads: int, device=None, dtype=None):
         super().__init__()
         assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
-
         self.d_model = d_model
         self.num_heads = num_heads
         self.d_k = d_model // num_heads
 
-        self.q_proj = nn.Linear(d_model, d_model)
-        self.k_proj = nn.Linear(d_model, d_model)
-        self.v_proj = nn.Linear(d_model, d_model)
-        self.out_proj = nn.Linear(d_model, d_model)
+        self.q_proj = Linear(d_model, d_model)
+        self.k_proj = Linear(d_model, d_model)
+        self.v_proj = Linear(d_model, d_model)
+        self.out_proj = Linear(d_model, d_model)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
