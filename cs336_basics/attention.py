@@ -32,7 +32,7 @@ def scaled_dot_product_attention(query, key, value, mask=None):
     return output
 
 class CausalMultiheadSelfAttention(nn.Module):
-    def __init__(self, d_model: int, num_heads: int):
+    def __init__(self, d_model: int, num_heads: int, device=None, dtype=None):
         super().__init__()
         assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
 
