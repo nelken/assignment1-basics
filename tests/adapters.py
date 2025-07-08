@@ -16,6 +16,10 @@ from cs336_basics.rmsnorm import RMSNorm
 from cs336_basics.swiglu import SwiGLU, SiLU
 from cs336_basics.rope import RotaryPositionalEmbedding 
 from cs336_basics.softmax import softmax
+from cs336_basics.attention import scaled_dot_product_attention
+from cs336_basics.attention import CausalMultiheadSelfAttention
+
+
 
 
 
@@ -127,7 +131,7 @@ def run_scaled_dot_product_attention(
     Returns:
         Float[Tensor, " ... queries d_v"]: Output of SDPA
     """
-    raise NotImplementedError
+    return scaled_dot_product_attention(Q, K, V, mask)
 
 
 def run_multihead_self_attention(
@@ -161,7 +165,33 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    batch_size, seq_len, _ = in_features.shape
+    d_k = d_model // num_heads
+
+    # Linear projections (manually)
+    q = in_features @ q_proj_weight.T  # shape: (B, S, d_model)
+    k = in_features @ k_proj_weight.T
+    v = in_features @ v_proj_weight.T
+
+    # Reshape for multi-head: (B, S, H, d_k) → (B, H, S, d_k)
+    q = q.view(batch_size, seq_len, num_heads, d_k).transpose(1, 2)
+    k = k.view(batch_size, seq_len, num_heads, d_k).transpose(1, 2)
+    v = v.view(batch_size, seq_len, num_heads, d_k).transpose(1, 2)
+
+    # Causal mask: shape (seq_len, seq_len)
+    mask = torch.tril(torch.ones(seq_len, seq_len, dtype=torch.bool, device=in_features.device))
+
+    # Scaled dot-product attention
+    context = scaled_dot_product_attention(q, k, v, mask)
+
+    # Combine heads: (B, H, S, d_k) → (B, S, d_model)
+    context = context.transpose(1, 2).contiguous().view(batch_size, seq_len, d_model)
+
+    # Final linear projection
+    output = context @ o_proj_weight.T  # shape: (B, S, d_model)
+
+    return output
+
 
 
 def run_multihead_self_attention_with_rope(
@@ -176,32 +206,44 @@ def run_multihead_self_attention_with_rope(
     in_features: Float[Tensor, " ... sequence_length d_in"],
     token_positions: Int[Tensor, " ... sequence_length"] | None = None,
 ) -> Float[Tensor, " ... sequence_length d_out"]:
-    """
-    Given the key, query, and value projection weights of a naive unbatched
-    implementation of multi-head attention, return the output of an optimized batched
-    implementation. This implementation should handle the key, query, and value projections
-    for all heads in a single matrix multiply.
-    This version of MHA should include RoPE.
-    In this case, the RoPE embedding dimension must be the head embedding dimension (d_model // num_heads).
-    See section 3.2.2 of Vaswani et al., 2017.
+    batch_size, seq_len, _ = in_features.shape
+    d_k = d_model // num_heads
 
-    Args:
-        d_model (int): Dimensionality of the feedforward input and output.
-        num_heads (int): Number of heads to use in multi-headed attention.
-        max_seq_len (int): Maximum sequence length to pre-cache if your implementation does that.
-        theta (float): RoPE parameter.
-        q_proj_weight (Float[Tensor, "d_k d_in"]): Weights for the Q projection
-        k_proj_weight (Float[Tensor, "d_k d_in"]): Weights for the K projection
-        v_proj_weight (Float[Tensor, "d_k d_in"]): Weights for the V projection
-        o_proj_weight (Float[Tensor, "d_model d_v"]): Weights for the output projection
-        in_features (Float[Tensor, "... sequence_length d_in"]): Tensor to run your implementation on.
-        token_positions (Int[Tensor, " ... sequence_length"] | None): Optional tensor with the positions of the tokens
+    rope = RotaryPositionalEmbedding(theta, d_k, max_seq_len, device=in_features.device)
 
-    Returns:
-        Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
-        implementation with the given QKV projection weights and input features.
-    """
-    raise NotImplementedError
+    # Linear projections
+    q = in_features @ q_proj_weight.T  # (B, S, d_model)
+    k = in_features @ k_proj_weight.T
+    v = in_features @ v_proj_weight.T
+
+    # Reshape for multi-head: (B, S, H, d_k) → (B, H, S, d_k)
+    q = q.view(batch_size, seq_len, num_heads, d_k).transpose(1, 2)
+    k = k.view(batch_size, seq_len, num_heads, d_k).transpose(1, 2)
+    v = v.view(batch_size, seq_len, num_heads, d_k).transpose(1, 2)
+
+    # Prepare token positions: (B, S) or use provided
+    if token_positions is None:
+        token_positions = torch.arange(seq_len, device=in_features.device).unsqueeze(0).expand(batch_size, seq_len)
+    # Expand to (B, 1, S) for broadcasting over heads
+    token_positions = token_positions.unsqueeze(1)  # (B, 1, S)
+
+    # Apply RoPE to Q and K: (B, H, S, d_k)
+    q = rope(q, token_positions)
+    k = rope(k, token_positions)
+
+    # Causal mask: (S, S)
+    mask = torch.tril(torch.ones(seq_len, seq_len, dtype=torch.bool, device=in_features.device))
+
+    # Scaled dot-product attention
+    context = scaled_dot_product_attention(q, k, v, mask)
+
+    # Combine heads: (B, H, S, d_k) → (B, S, d_model)
+    context = context.transpose(1, 2).contiguous().view(batch_size, seq_len, d_model)
+
+    # Final linear projection
+    output = context @ o_proj_weight.T  # (B, S, d_model)
+
+    return output
 
 
 def run_rope(
