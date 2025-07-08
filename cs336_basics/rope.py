@@ -3,7 +3,7 @@ import math
 import torch.nn as nn
 
 class RotaryPositionalEmbedding(nn.Module):
-    def __init__(self, theta: float, d_k: int, max_seq_len: int, device=None):
+    def __init__(self, theta: float, d_k: int, max_seq_len: int, device=None, dtype=None):
         super().__init__()
         assert d_k % 2 == 0, "d_k must be even for RoPE."
         self.d_k = d_k

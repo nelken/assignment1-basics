@@ -172,7 +172,7 @@ def run_multihead_self_attention(
         attention.q_proj.weight.copy_(q_proj_weight)
         attention.k_proj.weight.copy_(k_proj_weight)
         attention.v_proj.weight.copy_(v_proj_weight)
-        attention.out_proj.weight.copy_(o_proj_weight)
+        attention.output_proj.weight.copy_(o_proj_weight)
 
     # Run the forward pass
     return attention(in_features, None)
@@ -193,13 +193,13 @@ def run_multihead_self_attention_with_rope(
     token_positions: Int[Tensor, " ... sequence_length"] | None = None,
 ) -> Float[Tensor, " ... sequence_length d_out"]:
     
-    rope = RotaryPositionalEmbedding(theta, d_model// num_heads, max_seq_len, device=in_features.device)
-    attention = CausalMultiheadSelfAttention(d_model, num_heads, rope = rope)
+    rope = RotaryPositionalEmbedding(theta, d_model// num_heads, max_seq_len, device=in_features.device, dtype=in_features.dtype)
+    attention = CausalMultiheadSelfAttention(d_model, num_heads, rope = rope , device=in_features.device, dtype=in_features.dtype)
     with torch.no_grad():
         attention.q_proj.weight.copy_(q_proj_weight)
         attention.k_proj.weight.copy_(k_proj_weight)
         attention.v_proj.weight.copy_(v_proj_weight)
-        attention.out_proj.weight.copy_(o_proj_weight)
+        attention.output_proj.weight.copy_(o_proj_weight)
 
     # Run the forward pass
     return attention(in_features, token_positions)
@@ -299,10 +299,15 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    transformer_block = TransformerBlock(d_model, num_heads, d_ff, device=in_features.device, dtype=in_features.dtype)
+    #rope = RotaryPositionalEmbedding(theta, d_model// num_heads, max_seq_len, device=in_features.device)
+    batch_size, seq_len, _ = in_features.shape
+    rope = RotaryPositionalEmbedding(theta, d_model// num_heads, max_seq_len, device=in_features.device)
+    token_positions = torch.arange(seq_len, device=in_features.device).unsqueeze(0).expand(batch_size, seq_len)
+    transformer_block = TransformerBlock(d_model, num_heads, d_ff, rope, device=in_features.device, dtype=in_features.dtype)   
     with torch.no_grad():
         transformer_block.load_state_dict(weights)
-    return transformer_block(in_features)
+    return transformer_block(in_features, token_positions)
+
 
 def run_transformer_lm(
     vocab_size: int,

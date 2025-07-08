@@ -41,10 +41,10 @@ class CausalMultiheadSelfAttention(nn.Module):
         self.d_k = d_model // num_heads
         self.rope = rope
 
-        self.q_proj = Linear(d_model, d_model)
-        self.k_proj = Linear(d_model, d_model)
-        self.v_proj = Linear(d_model, d_model)
-        self.out_proj = Linear(d_model, d_model)
+        self.q_proj = Linear(d_model, d_model, device, dtype)
+        self.k_proj = Linear(d_model, d_model, device, dtype)
+        self.v_proj = Linear(d_model, d_model, device, dtype)
+        self.output_proj = Linear(d_model, d_model, device, dtype)
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
         """
@@ -74,4 +74,4 @@ class CausalMultiheadSelfAttention(nn.Module):
         attn_output = attn_output.transpose(1, 2).contiguous().view(B, S, self.d_model)
 
         # Final linear projection
-        return self.out_proj(attn_output)
+        return self.output_proj(attn_output)

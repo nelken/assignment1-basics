@@ -13,19 +13,18 @@ class TransformerBlock(nn.Module):
     def __init__(self, d_model: int, num_heads: int, d_ff: int, rope: RotaryPositionalEmbedding, device=None, dtype=None):
         super().__init__()
 
-        self.rope = rope
-        self.rms1 = RMSNorm(d_model, device = device, dtype = dtype)
-        self.self_attn = CausalMultiheadSelfAttention(d_model, num_heads, rope = rope, device = device, dtype = dtype)
-        self.rms2 = RMSNorm(d_model, device=None, dtype=None)
+        self.ln1 = RMSNorm(d_model, device = device, dtype = dtype)
+        self.attn = CausalMultiheadSelfAttention(d_model, num_heads, rope = rope, device = device, dtype = dtype)
+        self.ln2 = RMSNorm(d_model, device=device, dtype=dtype)
         self.ffn = SwiGLU(d_model, d_ff, device=device, dtype=dtype) 
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
         # Pre-norm attention
-        attn_out = self.self_attn(self.rms1(x))
+        attn_out = self.attn(self.ln1(x), token_positions)
         x = x + attn_out  # Residual
 
         # Pre-norm feed-forward
-        ffn_out = self.ffn(self.rms2(x))
+        ffn_out = self.ffn(self.ln2(x))
         x = x + ffn_out  # Residual
 
         return x
