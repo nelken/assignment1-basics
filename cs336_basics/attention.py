@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 from cs336_basics.linear import Linear
+from cs336_basics.rope import RotaryPositionalEmbedding
 
 def scaled_dot_product_attention(query, key, value, mask=None):
     """
@@ -32,19 +33,20 @@ def scaled_dot_product_attention(query, key, value, mask=None):
     return output
 
 class CausalMultiheadSelfAttention(nn.Module):
-    def __init__(self, d_model: int, num_heads: int, device=None, dtype=None):
+    def __init__(self, d_model: int, num_heads: int, rope: RotaryPositionalEmbedding | None, device=None, dtype=None):
         super().__init__()
         assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
         self.d_model = d_model
         self.num_heads = num_heads
         self.d_k = d_model // num_heads
+        self.rope = rope
 
         self.q_proj = Linear(d_model, d_model)
         self.k_proj = Linear(d_model, d_model)
         self.v_proj = Linear(d_model, d_model)
         self.out_proj = Linear(d_model, d_model)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
         """
         x: shape (batch_size, seq_len, d_model)
         """
@@ -57,6 +59,10 @@ class CausalMultiheadSelfAttention(nn.Module):
         q = project_and_reshape(self.q_proj, x)  # (B, H, S, d_k)
         k = project_and_reshape(self.k_proj, x)
         v = project_and_reshape(self.v_proj, x)
+
+        if self.rope is not None:
+            q = self.rope(q, token_positions)
+            k = self.rope(k, token_positions)
 
         # Create causal mask of shape (S, S)
         mask = torch.tril(torch.ones(S, S, dtype=torch.bool, device=x.device))

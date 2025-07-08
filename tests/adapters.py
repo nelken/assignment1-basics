@@ -18,6 +18,7 @@ from cs336_basics.rope import RotaryPositionalEmbedding
 from cs336_basics.softmax import softmax
 from cs336_basics.attention import scaled_dot_product_attention
 from cs336_basics.attention import CausalMultiheadSelfAttention
+from cs336_basics.transformer import TransformerBlock
 
 
 
@@ -165,32 +166,17 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    batch_size, seq_len, _ = in_features.shape
-    d_k = d_model // num_heads
 
-    # Linear projections (manually)
-    q = in_features @ q_proj_weight.T  # shape: (B, S, d_model)
-    k = in_features @ k_proj_weight.T
-    v = in_features @ v_proj_weight.T
+    attention = CausalMultiheadSelfAttention(d_model, num_heads, rope = None)
+    with torch.no_grad():
+        attention.q_proj.weight.copy_(q_proj_weight)
+        attention.k_proj.weight.copy_(k_proj_weight)
+        attention.v_proj.weight.copy_(v_proj_weight)
+        attention.out_proj.weight.copy_(o_proj_weight)
 
-    # Reshape for multi-head: (B, S, H, d_k) → (B, H, S, d_k)
-    q = q.view(batch_size, seq_len, num_heads, d_k).transpose(1, 2)
-    k = k.view(batch_size, seq_len, num_heads, d_k).transpose(1, 2)
-    v = v.view(batch_size, seq_len, num_heads, d_k).transpose(1, 2)
+    # Run the forward pass
+    return attention(in_features, None)
 
-    # Causal mask: shape (seq_len, seq_len)
-    mask = torch.tril(torch.ones(seq_len, seq_len, dtype=torch.bool, device=in_features.device))
-
-    # Scaled dot-product attention
-    context = scaled_dot_product_attention(q, k, v, mask)
-
-    # Combine heads: (B, H, S, d_k) → (B, S, d_model)
-    context = context.transpose(1, 2).contiguous().view(batch_size, seq_len, d_model)
-
-    # Final linear projection
-    output = context @ o_proj_weight.T  # shape: (B, S, d_model)
-
-    return output
 
 
 
@@ -206,44 +192,18 @@ def run_multihead_self_attention_with_rope(
     in_features: Float[Tensor, " ... sequence_length d_in"],
     token_positions: Int[Tensor, " ... sequence_length"] | None = None,
 ) -> Float[Tensor, " ... sequence_length d_out"]:
-    batch_size, seq_len, _ = in_features.shape
-    d_k = d_model // num_heads
+    
+    rope = RotaryPositionalEmbedding(theta, d_model// num_heads, max_seq_len, device=in_features.device)
+    attention = CausalMultiheadSelfAttention(d_model, num_heads, rope = rope)
+    with torch.no_grad():
+        attention.q_proj.weight.copy_(q_proj_weight)
+        attention.k_proj.weight.copy_(k_proj_weight)
+        attention.v_proj.weight.copy_(v_proj_weight)
+        attention.out_proj.weight.copy_(o_proj_weight)
 
-    rope = RotaryPositionalEmbedding(theta, d_k, max_seq_len, device=in_features.device)
-
-    # Linear projections
-    q = in_features @ q_proj_weight.T  # (B, S, d_model)
-    k = in_features @ k_proj_weight.T
-    v = in_features @ v_proj_weight.T
-
-    # Reshape for multi-head: (B, S, H, d_k) → (B, H, S, d_k)
-    q = q.view(batch_size, seq_len, num_heads, d_k).transpose(1, 2)
-    k = k.view(batch_size, seq_len, num_heads, d_k).transpose(1, 2)
-    v = v.view(batch_size, seq_len, num_heads, d_k).transpose(1, 2)
-
-    # Prepare token positions: (B, S) or use provided
-    if token_positions is None:
-        token_positions = torch.arange(seq_len, device=in_features.device).unsqueeze(0).expand(batch_size, seq_len)
-    # Expand to (B, 1, S) for broadcasting over heads
-    token_positions = token_positions.unsqueeze(1)  # (B, 1, S)
-
-    # Apply RoPE to Q and K: (B, H, S, d_k)
-    q = rope(q, token_positions)
-    k = rope(k, token_positions)
-
-    # Causal mask: (S, S)
-    mask = torch.tril(torch.ones(seq_len, seq_len, dtype=torch.bool, device=in_features.device))
-
-    # Scaled dot-product attention
-    context = scaled_dot_product_attention(q, k, v, mask)
-
-    # Combine heads: (B, H, S, d_k) → (B, S, d_model)
-    context = context.transpose(1, 2).contiguous().view(batch_size, seq_len, d_model)
-
-    # Final linear projection
-    output = context @ o_proj_weight.T  # (B, S, d_model)
-
-    return output
+    # Run the forward pass
+    return attention(in_features, token_positions)
+    
 
 
 def run_rope(
@@ -339,8 +299,10 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    raise NotImplementedError
-
+    transformer_block = TransformerBlock(d_model, num_heads, d_ff, device=in_features.device, dtype=in_features.dtype)
+    with torch.no_grad():
+        transformer_block.load_state_dict(weights)
+    return transformer_block(in_features)
 
 def run_transformer_lm(
     vocab_size: int,
