@@ -23,9 +23,6 @@ from cs336_basics.transformer import TransformerBlock
 
 
 
-
-
-
 def run_linear(
     d_in: int,
     d_out: int,
@@ -299,13 +296,15 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    #rope = RotaryPositionalEmbedding(theta, d_model// num_heads, max_seq_len, device=in_features.device)
     batch_size, seq_len, _ = in_features.shape
-    rope = RotaryPositionalEmbedding(theta, d_model// num_heads, max_seq_len, device=in_features.device)
+    print("RANI", seq_len, max_seq_len)
+    #rope = RotaryPositionalEmbedding(theta, d_model// num_heads, max_seq_len, device=in_features.device, dtype=in_features.dtype)
+    rope = RotaryPositionalEmbedding(theta, d_model// num_heads, max_seq_len, device=in_features.device, dtype=in_features.dtype)
     token_positions = torch.arange(seq_len, device=in_features.device).unsqueeze(0).expand(batch_size, seq_len)
     transformer_block = TransformerBlock(d_model, num_heads, d_ff, rope, device=in_features.device, dtype=in_features.dtype)   
+
     with torch.no_grad():
-        transformer_block.load_state_dict(weights)
+        transformer_block.load_state_dict(weights)            
     return transformer_block(in_features, token_positions)
 
 

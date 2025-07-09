@@ -50,28 +50,28 @@ class CausalMultiheadSelfAttention(nn.Module):
         """
         x: shape (batch_size, seq_len, d_model)
         """
-        B, S, _ = x.shape
+        B, seq_len, _ = x.shape
 
         # Project inputs and split heads
         def project_and_reshape(proj, x):
-            return proj(x).view(B, S, self.num_heads, self.d_k).transpose(1, 2)
+            return proj(x).view(B, seq_len, self.num_heads, self.d_k).transpose(1, 2)
         
         q = project_and_reshape(self.q_proj, x)  # (B, H, S, d_k)
         k = project_and_reshape(self.k_proj, x)
         v = project_and_reshape(self.v_proj, x)
 
-        if self.rope is not None:
+        if self.rope is not None and token_positions is not None:
             q = self.rope(q, token_positions)
             k = self.rope(k, token_positions)
 
         # Create causal mask of shape (S, S)
-        mask = torch.tril(torch.ones(S, S, dtype=torch.bool, device=x.device))
+        mask = torch.tril(torch.ones(seq_len, seq_len, dtype=torch.bool, device=x.device))
 
         # Apply attention
         attn_output = scaled_dot_product_attention(q, k, v, mask=mask)
 
         # Combine heads: (B, H, S, d_k) → (B, S, d_model)
-        attn_output = attn_output.transpose(1, 2).contiguous().view(B, S, self.d_model)
+        attn_output = attn_output.transpose(1, 2).contiguous().view(B, seq_len, self.d_model)
 
         # Final linear projection
         return self.output_proj(attn_output)

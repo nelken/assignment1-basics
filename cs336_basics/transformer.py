@@ -10,12 +10,12 @@ from cs336_basics.rope import RotaryPositionalEmbedding
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, d_model: int, num_heads: int, d_ff: int, rope: RotaryPositionalEmbedding, device=None, dtype=None):
+    def __init__(self, d_model: int, num_heads: int, d_ff: int, rope: RotaryPositionalEmbedding | None, device=None, dtype=None):
         super().__init__()
 
-        self.ln1 = RMSNorm(d_model, device = device, dtype = dtype)
+        self.ln1 = RMSNorm(d_model, eps=1e-6, device = device, dtype = dtype)        
         self.attn = CausalMultiheadSelfAttention(d_model, num_heads, rope = rope, device = device, dtype = dtype)
-        self.ln2 = RMSNorm(d_model, device=device, dtype=dtype)
+        self.ln2 = RMSNorm(d_model, eps=1e-6, device=device, dtype=dtype)
         self.ffn = SwiGLU(d_model, d_ff, device=device, dtype=dtype) 
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
