@@ -297,7 +297,6 @@ def run_transformer_block(
         running the Transformer block on the input features while using RoPE.
     """
     batch_size, seq_len, _ = in_features.shape
-    print("RANI", seq_len, max_seq_len)
     #rope = RotaryPositionalEmbedding(theta, d_model// num_heads, max_seq_len, device=in_features.device, dtype=in_features.dtype)
     rope = RotaryPositionalEmbedding(theta, d_model// num_heads, max_seq_len, device=in_features.device, dtype=in_features.dtype)
     token_positions = torch.arange(seq_len, device=in_features.device).unsqueeze(0).expand(batch_size, seq_len)
