@@ -12,7 +12,7 @@ class RMSNorm(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Compute the L2 norm over the last dimension (d_model)
         in_dtype = x.dtype
-        x = x.to(torch.float32)
+        x = x.to(torch.float64)
         norm = x.norm(2, dim=-1, keepdim=True)  # shape: (batch, seq_len, 1)
         rms = norm / (self.d_model ** 0.5)
         x_normed = x / (rms + self.eps)

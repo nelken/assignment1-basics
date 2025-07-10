@@ -2,6 +2,8 @@ from einops import rearrange
 import numpy
 import torch
 import torch.nn.functional as F
+from pathlib import Path
+import numpy as np
 
 from .adapters import (
     run_multihead_self_attention_with_rope,
@@ -139,7 +141,7 @@ def test_transformer_lm(
 ):
     # reference_weights = torch.load(FIXTURES_PATH / "transformer_lm_weights.pt")
     # in_indices = torch.load(FIXTURES_PATH / "in_indices.pt")
-    # expected_output = torch.load(FIXTURES_PATH / "transformer_lm_expected_output.pt")
+    #expected_output = torch.load(FIXTURES_PATH / "transformer_lm_expected_output.pt")
     state_dict, _ = ts_state_dict
 
     actual_output = run_transformer_lm(
@@ -153,13 +155,26 @@ def test_transformer_lm(
         weights=state_dict,
         in_indices=in_indices,
     )
-    # numpy.testing.assert_allclose(actual_output.detach().numpy(), expected_output.detach().numpy(), atol=1e-4)
-    numpy_snapshot.assert_match(
-        actual_output, 
-        atol=1e-4,
-        rtol=1e-2
-    )
+    #numpy.testing.assert_allclose(actual_output.detach().numpy(), expected_output.detach().numpy(), atol=1e-4)
+    snapshot_path = "tests/_snapshots/test_transformer_lm.npz"
 
+    # Load the snapshot
+    if 0:
+        with np.load(snapshot_path) as data:
+            for key, array in data.items():
+                #print(f"Key: {key}, Array shape: {array.shape}")
+                #print(array)  # Print the array contents
+                np.set_printoptions(precision=8)
+                for i in range(len(actual_output[0])):
+                    
+                    
+                    print(i, actual_output[0][i], array[0][i])
+    numpy_snapshot.assert_match(
+            actual_output, 
+            atol=1e-4,
+            rtol=1e-2
+        )
+    
 
 def test_transformer_lm_truncated_input(
     numpy_snapshot, vocab_size, n_keys, d_model, n_layers, n_heads, d_ff, theta, ts_state_dict, in_indices

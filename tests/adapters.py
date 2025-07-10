@@ -383,8 +383,8 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    print("RANI", d_model, num_layers, num_heads, d_ff, rope_theta)
-    transformer_lm = TransformerLM(vocab_size=vocab_size, max_seq_len=context_length, d_model=d_model, num_layers=num_layers, num_heads=num_heads, d_ff=d_ff, theta=rope_theta, device=in_indices.device, dtype=torch.float32)
+    transformer_lm = TransformerLM(vocab_size=vocab_size, max_seq_len=context_length, d_model=d_model, num_layers=num_layers, 
+                    num_heads=num_heads, d_ff=d_ff, theta=rope_theta, device=in_indices.device, dtype = torch.float64)
     with torch.no_grad():
         transformer_lm.load_state_dict(weights)
     return transformer_lm(in_indices)

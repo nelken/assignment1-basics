@@ -34,7 +34,7 @@ class Linear(nn.Module):
         # x: [batch..., in_features]
         # weight: [out_features, in_features]
         # result: [batch..., out_features]
-        return torch.einsum('...si,oi->...so', x, self.weight)
-        #return x @ self.weight.T
+        #return torch.einsum('...si,oi->...so', x, self.weight)
+        return x @ self.weight.T
 
         

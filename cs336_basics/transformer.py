@@ -17,11 +17,14 @@ class TransformerBlock(nn.Module):
         self.attn = CausalMultiheadSelfAttention(d_model, num_heads, max_seq_len, theta, device = device, dtype = dtype)
         self.ln2 = RMSNorm(d_model, eps=1e-6, device=device, dtype=dtype)
         self.ffn = SwiGLU(d_model, d_ff, device=device, dtype=dtype) 
+        print("RANI TransformerBlock dtype", dtype)
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
         
         # Pre-norm attention
         attn_out = self.attn(self.ln1(x), token_positions)
+        torch.set_printoptions(precision=17)
+
         x = x + attn_out  # Residual
 
         # Pre-norm feed-forward
@@ -45,7 +48,8 @@ class TransformerLM(nn.Module):
                  dtype=None):
         super().__init__()
 
-        self.token_embeddings = Embedding(vocab_size, d_model, device=device)
+        self.token_embeddings = Embedding(vocab_size, d_model, device=device, dtype = dtype)
+        print("RANI token_embeddings dtype", dtype)
 
         # Transformer blocks
         self.layers = nn.ModuleList([
