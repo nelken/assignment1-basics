@@ -33,13 +33,22 @@ def scaled_dot_product_attention(query, key, value, mask=None):
     return output
 
 class CausalMultiheadSelfAttention(nn.Module):
-    def __init__(self, d_model: int, num_heads: int, rope: RotaryPositionalEmbedding | None, device=None, dtype=None):
+    def __init__(self, d_model: int, num_heads: int, max_seq_len: int | None = None, theta: float | None = None, device=None, dtype=None):
         super().__init__()
         assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
         self.d_model = d_model
         self.num_heads = num_heads
         self.d_k = d_model // num_heads
-        self.rope = rope
+        if theta is not None and max_seq_len is not None:
+            self.rope = RotaryPositionalEmbedding(
+                theta=theta,
+                d_k=d_model // num_heads,
+                max_seq_len=max_seq_len,
+                device=device,
+                dtype=dtype
+            )
+        else:
+            self.rope = None
 
         self.q_proj = Linear(d_model, d_model, device, dtype)
         self.k_proj = Linear(d_model, d_model, device, dtype)

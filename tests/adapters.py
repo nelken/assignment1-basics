@@ -8,7 +8,6 @@ from jaxtyping import Float, Int
 import numpy.typing as npt
 import torch
 from torch import Tensor
-#from cs336_basics.train_bpe_better import train_bpe 
 from cs336_basics.train_bpe import train_bpe 
 from cs336_basics.linear import Linear
 from cs336_basics.embedding import Embedding
@@ -19,6 +18,7 @@ from cs336_basics.softmax import softmax
 from cs336_basics.attention import scaled_dot_product_attention
 from cs336_basics.attention import CausalMultiheadSelfAttention
 from cs336_basics.transformer import TransformerBlock
+from cs336_basics.transformer import TransformerLM
 
 
 
@@ -164,7 +164,7 @@ def run_multihead_self_attention(
         implementation with the given QKV projection weights and input features.
     """
 
-    attention = CausalMultiheadSelfAttention(d_model, num_heads, rope = None)
+    attention = CausalMultiheadSelfAttention(d_model, num_heads)
     with torch.no_grad():
         attention.q_proj.weight.copy_(q_proj_weight)
         attention.k_proj.weight.copy_(k_proj_weight)
@@ -190,8 +190,7 @@ def run_multihead_self_attention_with_rope(
     token_positions: Int[Tensor, " ... sequence_length"] | None = None,
 ) -> Float[Tensor, " ... sequence_length d_out"]:
     
-    rope = RotaryPositionalEmbedding(theta, d_model// num_heads, max_seq_len, device=in_features.device, dtype=in_features.dtype)
-    attention = CausalMultiheadSelfAttention(d_model, num_heads, rope = rope , device=in_features.device, dtype=in_features.dtype)
+    attention = CausalMultiheadSelfAttention(d_model, num_heads, max_seq_len, theta, device=in_features.device, dtype=in_features.dtype)
     with torch.no_grad():
         attention.q_proj.weight.copy_(q_proj_weight)
         attention.k_proj.weight.copy_(k_proj_weight)
@@ -297,10 +296,8 @@ def run_transformer_block(
         running the Transformer block on the input features while using RoPE.
     """
     batch_size, seq_len, _ = in_features.shape
-    #rope = RotaryPositionalEmbedding(theta, d_model// num_heads, max_seq_len, device=in_features.device, dtype=in_features.dtype)
-    rope = RotaryPositionalEmbedding(theta, d_model// num_heads, max_seq_len, device=in_features.device, dtype=in_features.dtype)
     token_positions = torch.arange(seq_len, device=in_features.device).unsqueeze(0).expand(batch_size, seq_len)
-    transformer_block = TransformerBlock(d_model, num_heads, d_ff, rope, device=in_features.device, dtype=in_features.dtype)   
+    transformer_block = TransformerBlock(d_model, num_heads, d_ff, max_seq_len, theta, device=in_features.device, dtype=in_features.dtype)   
 
     with torch.no_grad():
         transformer_block.load_state_dict(weights)            
@@ -386,7 +383,11 @@ def run_transformer_lm(
         Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
         next-word distribution for each token.
     """
-    raise NotImplementedError
+    print("RANI", d_model, num_layers, num_heads, d_ff, rope_theta)
+    transformer_lm = TransformerLM(vocab_size=vocab_size, max_seq_len=context_length, d_model=d_model, num_layers=num_layers, num_heads=num_heads, d_ff=d_ff, theta=rope_theta, device=in_indices.device, dtype=torch.float32)
+    with torch.no_grad():
+        transformer_lm.load_state_dict(weights)
+    return transformer_lm(in_indices)
 
 
 def run_rmsnorm(
